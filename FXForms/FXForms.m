@@ -110,7 +110,7 @@ static inline void FXFormLabelSetMinFontSize(UILabel *label, CGFloat fontSize)
     }
 }
 
-static inline NSArray *FXFormProperties(id<FXForm> form)
+static inline NSArray *FXFormProperties(id<FXForm> form, FXFormController * controller)
 {
     if (!form) return nil;
     
@@ -185,7 +185,11 @@ static inline NSArray *FXFormProperties(id<FXForm> form)
                             }
                             else
                             {
-                                valueType = FXFormFieldTypeDefault;
+                                valueType = [controller fieldTypeForPropertyClass:valueClass];
+                                if(valueType == nil) 
+                                {
+                                    valueType = FXFormFieldTypeDefault;
+                                }
                             }
                         }
                         break;
@@ -279,7 +283,7 @@ static BOOL *FXFormCanGetValueForKey(id<FXForm> form, NSString *key)
     }
     
     //does a property exist for it?
-    if ([[FXFormProperties(form) valueForKey:FXFormFieldKey] containsObject:key])
+    if ([[FXFormProperties(form, nil) valueForKey:FXFormFieldKey] containsObject:key])
     {
         return YES;
     }
@@ -315,7 +319,7 @@ static BOOL *FXFormCanSetValueForKey(id<FXForm> form, NSString *key)
     }
     
     //does a property exist for it?
-    if ([[FXFormProperties(form) valueForKey:FXFormFieldKey] containsObject:key])
+    if ([[FXFormProperties(form, nil) valueForKey:FXFormFieldKey] containsObject:key])
     {
         return YES;
     }
@@ -348,7 +352,7 @@ static BOOL *FXFormSetValueForKey(id<FXForm> form, id value, NSString *key)
     {
         if (!value)
         {
-            for (NSDictionary *field in FXFormProperties(form))
+            for (NSDictionary *field in FXFormProperties(form, nil))
             {
                 if ([field[FXFormFieldKey] isEqualToString:key])
                 {
@@ -372,6 +376,7 @@ static BOOL *FXFormSetValueForKey(id<FXForm> form, id value, NSString *key)
 
 @property (nonatomic, copy) NSArray *sections;
 @property (nonatomic, strong) NSMutableDictionary *cellClassesForFieldTypes;
+@property (nonatomic, strong) NSMutableDictionary *fieldTypesForPropertyClasses;
 @property (nonatomic, strong) NSMutableDictionary *controllerClassesForFieldTypes;
 
 - (void)performAction:(SEL)selector withSender:(id)sender;
@@ -408,7 +413,7 @@ static BOOL *FXFormSetValueForKey(id<FXForm> form, id value, NSString *key)
     if (!fields)
     {
         //use default fields
-        fields = [NSMutableArray arrayWithArray:FXFormProperties(form)];
+        fields = [NSMutableArray arrayWithArray:FXFormProperties(form, formController)];
     }
     
     //add extra fields
@@ -416,7 +421,7 @@ static BOOL *FXFormSetValueForKey(id<FXForm> form, id value, NSString *key)
     
     //process fields
     NSMutableDictionary *fieldDictionariesByKey = [NSMutableDictionary dictionary];
-    for (NSDictionary *dict in FXFormProperties(form))
+    for (NSDictionary *dict in FXFormProperties(form, formController))
     {
         fieldDictionariesByKey[dict[FXFormFieldKey]] = dict;
     }
@@ -964,7 +969,7 @@ static BOOL *FXFormSetValueForKey(id<FXForm> form, id value, NSString *key)
     else
     {
         value = nil;
-        for (NSDictionary *field in FXFormProperties(self.field.form))
+        for (NSDictionary *field in FXFormProperties(self.field.form, self.field.formController))
         {
             if ([field[FXFormFieldKey] isEqualToString:self.field.key])
             {
@@ -1137,6 +1142,7 @@ static BOOL *FXFormSetValueForKey(id<FXForm> form, id value, NSString *key)
                                        FXFormFieldTypeImage: [FXFormImagePickerCell class]} mutableCopy];
         
         _controllerClassesForFieldTypes = [@{FXFormFieldTypeDefault: [FXFormViewController class]} mutableCopy];
+        _fieldTypesForPropertyClasses = [[NSMutableDictionary alloc] init];
                 
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(keyboardWillShow:)
@@ -1166,6 +1172,19 @@ static BOOL *FXFormSetValueForKey(id<FXForm> form, id value, NSString *key)
     self.cellClassesForFieldTypes[FXFormFieldTypeDefault];
 }
 
+- (NSString *)fieldTypeForPropertyClass:(Class)propClass
+{
+    FXFormController * c = self;
+    
+    NSString * ft = c.fieldTypesForPropertyClasses[NSStringFromClass(propClass)];
+    while(ft == nil && c != nil) {
+        c = c.parentFormController;
+        ft = c.fieldTypesForPropertyClasses[NSStringFromClass(propClass)];
+    }
+    
+    return ft;
+}
+
 - (void)registerDefaultFieldCellClass:(Class)cellClass
 {
     NSParameterAssert([cellClass conformsToProtocol:@protocol(FXFormFieldCell)]);
@@ -1176,6 +1195,11 @@ static BOOL *FXFormSetValueForKey(id<FXForm> form, id value, NSString *key)
 {
     NSParameterAssert([cellClass conformsToProtocol:@protocol(FXFormFieldCell)]);
     self.cellClassesForFieldTypes[fieldType] = cellClass;
+}
+
+- (void)registerFieldType:(NSString *)fieldType forPropertyClass:(Class)propClass
+{
+    self.fieldTypesForPropertyClasses[NSStringFromClass(propClass)] = fieldType;
 }
 
 - (Class)viewControllerClassForFieldType:(NSString *)fieldType
