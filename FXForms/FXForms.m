@@ -1168,7 +1168,7 @@ static BOOL *FXFormSetValueForKey(id<FXForm> form, id value, NSString *key)
 - (Class)cellClassForFieldType:(NSString *)fieldType
 {
     return self.cellClassesForFieldTypes[fieldType] ?:
-    self.parentFormController.cellClassesForFieldTypes[fieldType] ?:
+    [self.parentFormController cellClassForFieldType:fieldType] ?:
     self.cellClassesForFieldTypes[FXFormFieldTypeDefault];
 }
 
